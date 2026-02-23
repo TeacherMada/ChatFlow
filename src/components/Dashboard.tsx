@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Settings, LogOut, Plus, Activity, Power, PowerOff, Edit, Menu, X, User, Shield, Trash2 } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, Plus, Activity, Power, PowerOff, Edit, Menu, X, User, Shield, Trash2, LayoutTemplate, UserPlus, Headphones } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { templates } from '../data/templates';
 
 export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
   const [pages, setPages] = useState<any[]>([]);
@@ -9,6 +10,7 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [view, setView] = useState<'flows' | 'settings'>('flows');
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
   useEffect(() => {
     fetchPages();
@@ -59,18 +61,26 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
     setIsSidebarOpen(false);
   };
 
-  const handleCreateFlow = async () => {
+  const handleCreateFlow = async (templateId: string = 'blank') => {
     const name = prompt("Enter Flow Name:");
     if (!name) return;
+    
+    const template = templates.find(t => t.id === templateId);
     
     const res = await fetch('/api/flows', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageId: selectedPage.id, name })
+      body: JSON.stringify({ 
+        pageId: selectedPage.id, 
+        name,
+        nodes: template?.nodes,
+        edges: template?.edges
+      })
     });
     
     if (res.ok) {
       fetchFlows(selectedPage.id);
+      setIsTemplateModalOpen(false);
     }
   };
 
@@ -83,6 +93,15 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
     
     if (res.ok) {
       fetchFlows(selectedPage.id);
+    }
+  };
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'UserPlus': return <UserPlus className="w-6 h-6" />;
+      case 'Headphones': return <Headphones className="w-6 h-6" />;
+      case 'MessageSquare': return <MessageSquare className="w-6 h-6" />;
+      default: return <Plus className="w-6 h-6" />;
     }
   };
 
@@ -149,6 +168,48 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Template Modal */}
+      <AnimatePresence>
+        {isTemplateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Create New Flow</h2>
+                  <p className="text-sm text-gray-500">Choose a template to get started quickly</p>
+                </div>
+                <button onClick={() => setIsTemplateModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {templates.map(template => (
+                    <button
+                      key={template.id}
+                      onClick={() => handleCreateFlow(template.id)}
+                      className="flex flex-col text-left bg-white p-6 rounded-xl border-2 border-transparent hover:border-indigo-500 shadow-sm hover:shadow-md transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                        {getIcon(template.icon)}
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{template.name}</h3>
+                      <p className="text-sm text-gray-500">{template.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -275,7 +336,7 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h3 className="text-lg font-medium text-gray-900">Chat Flows</h3>
                 <button
-                  onClick={handleCreateFlow}
+                  onClick={() => setIsTemplateModalOpen(true)}
                   className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4" />
@@ -320,7 +381,7 @@ export default function Dashboard({ user, onLogout, onSelectFlow }: any) {
                     <h3 className="text-lg font-medium text-gray-900 mb-1">No flows yet</h3>
                     <p className="text-sm text-gray-500 mb-4">Create your first chat flow to get started.</p>
                     <button
-                      onClick={handleCreateFlow}
+                      onClick={() => setIsTemplateModalOpen(true)}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
                     >
                       <Plus className="w-4 h-4" />

@@ -12,7 +12,7 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, MessageSquare, HelpCircle, GitBranch, Zap, Play, Menu, X } from 'lucide-react';
+import { ArrowLeft, Save, MessageSquare, HelpCircle, GitBranch, Zap, Play, Menu, X, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const nodeTypes = {
@@ -53,6 +53,19 @@ const nodeTypes = {
       </div>
       <Handle type="source" position={Position.Bottom} id="true" className="w-3 h-3 bg-green-500 left-1/4" />
       <Handle type="source" position={Position.Bottom} id="false" className="w-3 h-3 bg-red-500 left-3/4" />
+    </div>
+  ),
+  input: ({ data }: any) => (
+    <div className="bg-white border-2 border-purple-400 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-purple-400" />
+      <div className="bg-purple-50 p-3 rounded-t-md border-b border-purple-100 flex items-center gap-2">
+        <Keyboard className="w-4 h-4 text-purple-600" />
+        <span className="font-semibold text-sm text-purple-900">User Input</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-gray-600 italic">"{data.label}"</p>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-purple-400" />
     </div>
   ),
 };
@@ -153,6 +166,16 @@ export default function FlowBuilder({ flow, onBack }: any) {
         <div>
           <p className="text-sm font-medium text-gray-900">Condition</p>
           <p className="text-xs text-gray-500">Split flow based on rules</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('input')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-purple-100 group-hover:text-purple-600 text-gray-600">
+          <Keyboard className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">User Input</p>
+          <p className="text-xs text-gray-500">Wait for user reply</p>
         </div>
       </button>
       

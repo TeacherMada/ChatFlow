@@ -225,10 +225,10 @@ app.get("/api/pages/:pageId/flows", (req, res) => {
 });
 
 app.post("/api/flows", (req, res) => {
-  const { pageId, name } = req.body;
+  const { pageId, name, nodes, edges } = req.body;
   const id = uuidv4();
-  const defaultNodes = JSON.stringify([{ id: 'start', type: 'trigger', position: { x: 250, y: 50 }, data: { label: 'Start Trigger' } }]);
-  const defaultEdges = JSON.stringify([]);
+  const defaultNodes = nodes ? JSON.stringify(nodes) : JSON.stringify([{ id: 'start', type: 'trigger', position: { x: 250, y: 50 }, data: { label: 'Start Trigger' } }]);
+  const defaultEdges = edges ? JSON.stringify(edges) : JSON.stringify([]);
   
   db.prepare("INSERT INTO flows (id, page_id, name, nodes, edges) VALUES (?, ?, ?, ?, ?)").run(id, pageId, name, defaultNodes, defaultEdges);
   res.json({ success: true, flow: { id, page_id: pageId, name, is_active: 0, nodes: defaultNodes, edges: defaultEdges } });
@@ -355,9 +355,15 @@ async function processFlow(page: any, user: any, senderId: string, messageText: 
     if (nextNode.type === 'message') {
       await sendMetaMessage(page.access_token, senderId, nextNode.data.label);
       db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
+      currentNodeId = nextNode.id;
+    } else if (nextNode.type === 'input') {
+      await sendMetaMessage(page.access_token, senderId, nextNode.data.label);
+      db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
+      currentNodeId = nextNode.id;
+      break; // Stop and wait for user input
+    } else {
+      currentNodeId = nextNode.id;
     }
-    
-    currentNodeId = nextNode.id;
   }
 
   if (currentNodeId !== (conversation?.state || null)) {
