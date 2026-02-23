@@ -12,7 +12,7 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, MessageSquare, HelpCircle, GitBranch, Zap, Play, Menu, X, Keyboard } from 'lucide-react';
+import { ArrowLeft, Save, MessageSquare, HelpCircle, GitBranch, Zap, Play, Menu, X, Keyboard, Image as ImageIcon, List, MousePointerClick, Database, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const nodeTypes = {
@@ -66,6 +66,81 @@ const nodeTypes = {
         <p className="text-sm text-gray-600 italic">"{data.label}"</p>
       </div>
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-purple-400" />
+    </div>
+  ),
+  image: ({ data }: any) => (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-gray-400" />
+      <div className="bg-gray-50 p-3 rounded-t-md border-b border-gray-200 flex items-center gap-2">
+        <ImageIcon className="w-4 h-4 text-gray-600" />
+        <span className="font-semibold text-sm text-gray-900">Send Image</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-gray-600 truncate">{data.url || 'No image URL'}</p>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-gray-400" />
+    </div>
+  ),
+  quick_replies: ({ data }: any) => (
+    <div className="bg-white border border-blue-200 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-blue-400" />
+      <div className="bg-blue-50 p-3 rounded-t-md border-b border-blue-100 flex items-center gap-2">
+        <List className="w-4 h-4 text-blue-600" />
+        <span className="font-semibold text-sm text-blue-900">Quick Replies</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-gray-600 mb-2">{data.label}</p>
+        <div className="flex flex-wrap gap-1">
+          {(data.replies || ['Yes', 'No']).map((r: string, i: number) => (
+            <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{r}</span>
+          ))}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-400" />
+    </div>
+  ),
+  buttons: ({ data }: any) => (
+    <div className="bg-white border border-blue-200 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-blue-400" />
+      <div className="bg-blue-50 p-3 rounded-t-md border-b border-blue-100 flex items-center gap-2">
+        <MousePointerClick className="w-4 h-4 text-blue-600" />
+        <span className="font-semibold text-sm text-blue-900">Buttons</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-gray-600 mb-2">{data.label}</p>
+        <div className="flex flex-col gap-1">
+          {(data.buttons || ['Click Here']).map((b: string, i: number) => (
+            <div key={i} className="px-2 py-1 border border-blue-200 text-blue-600 text-xs rounded text-center">{b}</div>
+          ))}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-400" />
+    </div>
+  ),
+  set_variable: ({ data }: any) => (
+    <div className="bg-white border-2 border-emerald-400 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-emerald-400" />
+      <div className="bg-emerald-50 p-3 rounded-t-md border-b border-emerald-100 flex items-center gap-2">
+        <Database className="w-4 h-4 text-emerald-600" />
+        <span className="font-semibold text-sm text-emerald-900">Set Variable</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-gray-600"><span className="font-mono bg-gray-100 px-1 rounded">{data.key || 'key'}</span> = {data.value || 'value'}</p>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-emerald-400" />
+    </div>
+  ),
+  add_tag: ({ data }: any) => (
+    <div className="bg-white border-2 border-emerald-400 rounded-lg shadow-sm w-64">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-emerald-400" />
+      <div className="bg-emerald-50 p-3 rounded-t-md border-b border-emerald-100 flex items-center gap-2">
+        <Tag className="w-4 h-4 text-emerald-600" />
+        <span className="font-semibold text-sm text-emerald-900">Add Tag</span>
+      </div>
+      <div className="p-4">
+        <span className="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs rounded-full">{data.tag || 'new_tag'}</span>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-emerald-400" />
     </div>
   ),
 };
@@ -126,16 +201,60 @@ export default function FlowBuilder({ flow, onBack }: any) {
   };
 
   const onNodeDoubleClick = (event: React.MouseEvent, node: any) => {
-    const newLabel = prompt('Enter new text:', node.data.label);
-    if (newLabel) {
-      setNodes((nds) =>
-        nds.map((n) => {
-          if (n.id === node.id) {
-            return { ...n, data: { ...n.data, label: newLabel } };
-          }
-          return n;
-        })
-      );
+    if (node.type === 'image') {
+      const url = prompt('Enter Image URL:', node.data.url);
+      if (url !== null) {
+        setNodes((nds) => nds.map((n) => n.id === node.id ? { ...n, data: { ...n.data, url } } : n));
+      }
+    } else if (node.type === 'quick_replies') {
+      const label = prompt('Enter Question Text:', node.data.label);
+      const replies = prompt('Enter Replies (comma separated):', (node.data.replies || []).join(','));
+      if (label !== null || replies !== null) {
+        setNodes((nds) => nds.map((n) => n.id === node.id ? { 
+          ...n, 
+          data: { 
+            ...n.data, 
+            label: label || n.data.label, 
+            replies: replies ? replies.split(',').map((s: string) => s.trim()) : n.data.replies 
+          } 
+        } : n));
+      }
+    } else if (node.type === 'buttons') {
+      const label = prompt('Enter Message Text:', node.data.label);
+      const buttons = prompt('Enter Buttons (comma separated):', (node.data.buttons || []).join(','));
+      if (label !== null || buttons !== null) {
+        setNodes((nds) => nds.map((n) => n.id === node.id ? { 
+          ...n, 
+          data: { 
+            ...n.data, 
+            label: label || n.data.label, 
+            buttons: buttons ? buttons.split(',').map((s: string) => s.trim()) : n.data.buttons 
+          } 
+        } : n));
+      }
+    } else if (node.type === 'set_variable') {
+      const key = prompt('Enter Variable Key:', node.data.key);
+      const value = prompt('Enter Variable Value:', node.data.value);
+      if (key !== null || value !== null) {
+        setNodes((nds) => nds.map((n) => n.id === node.id ? { ...n, data: { ...n.data, key: key || n.data.key, value: value || n.data.value } } : n));
+      }
+    } else if (node.type === 'add_tag') {
+      const tag = prompt('Enter Tag Name:', node.data.tag);
+      if (tag !== null) {
+        setNodes((nds) => nds.map((n) => n.id === node.id ? { ...n, data: { ...n.data, tag } } : n));
+      }
+    } else {
+      const newLabel = prompt('Enter new text:', node.data.label);
+      if (newLabel) {
+        setNodes((nds) =>
+          nds.map((n) => {
+            if (n.id === node.id) {
+              return { ...n, data: { ...n.data, label: newLabel } };
+            }
+            return n;
+          })
+        );
+      }
     }
   };
 
@@ -154,8 +273,38 @@ export default function FlowBuilder({ flow, onBack }: any) {
           <MessageSquare className="w-4 h-4" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-900">Send Message</p>
-          <p className="text-xs text-gray-500">Text, image, or gallery</p>
+          <p className="text-sm font-medium text-gray-900">Text</p>
+          <p className="text-xs text-gray-500">Simple text message</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('image')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-indigo-100 group-hover:text-indigo-600 text-gray-600">
+          <ImageIcon className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Image</p>
+          <p className="text-xs text-gray-500">Send a picture</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('quick_replies')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 text-gray-600">
+          <List className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Quick Replies</p>
+          <p className="text-xs text-gray-500">Text with choice chips</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('buttons')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 text-gray-600">
+          <MousePointerClick className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Buttons</p>
+          <p className="text-xs text-gray-500">Text with CTA buttons</p>
         </div>
       </button>
 
@@ -176,6 +325,126 @@ export default function FlowBuilder({ flow, onBack }: any) {
         <div>
           <p className="text-sm font-medium text-gray-900">User Input</p>
           <p className="text-xs text-gray-500">Wait for user reply</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('image')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-pink-500 hover:bg-pink-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-pink-100 group-hover:text-pink-600 text-gray-600">
+          <ImageIcon className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Image</p>
+          <p className="text-xs text-gray-500">Send an image</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('quick_replies')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 text-gray-600">
+          <List className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Quick Replies</p>
+          <p className="text-xs text-gray-500">Multiple choice options</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('buttons')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-cyan-500 hover:bg-cyan-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-cyan-100 group-hover:text-cyan-600 text-gray-600">
+          <MousePointerClick className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Buttons</p>
+          <p className="text-xs text-gray-500">Interactive buttons</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('set_variable')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-orange-100 group-hover:text-orange-600 text-gray-600">
+          <Database className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Set Variable</p>
+          <p className="text-xs text-gray-500">Store user data</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('add_tag')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-teal-500 hover:bg-teal-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-teal-100 group-hover:text-teal-600 text-gray-600">
+          <Tag className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Add Tag</p>
+          <p className="text-xs text-gray-500">Tag the user</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('image')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 group-hover:text-gray-600 text-gray-600">
+          <Image className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Image</p>
+          <p className="text-xs text-gray-500">Send an image</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('quick_replies')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 text-gray-600">
+          <List className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Quick Replies</p>
+          <p className="text-xs text-gray-500">Multiple choice options</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('buttons')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-cyan-500 hover:bg-cyan-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-cyan-100 group-hover:text-cyan-600 text-gray-600">
+          <MousePointer className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Buttons</p>
+          <p className="text-xs text-gray-500">Text with buttons</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('add_tag')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-green-100 group-hover:text-green-600 text-gray-600">
+          <Tag className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Add Tag</p>
+          <p className="text-xs text-gray-500">Tag the user</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('set_variable')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-orange-100 group-hover:text-orange-600 text-gray-600">
+          <Database className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Set Variable</p>
+          <p className="text-xs text-gray-500">Save data to user</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('set_variable')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-emerald-100 group-hover:text-emerald-600 text-gray-600">
+          <Database className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Set Variable</p>
+          <p className="text-xs text-gray-500">Save user data</p>
+        </div>
+      </button>
+
+      <button onClick={() => addNode('add_tag')} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left group">
+        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-emerald-100 group-hover:text-emerald-600 text-gray-600">
+          <Tag className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900">Add Tag</p>
+          <p className="text-xs text-gray-500">Segment users</p>
         </div>
       </button>
       

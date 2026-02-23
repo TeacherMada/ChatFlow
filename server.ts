@@ -78,6 +78,32 @@ db.exec(`
     last_interaction DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (page_id) REFERENCES pages(id)
   );
+
+  CREATE TABLE IF NOT EXISTS keywords (
+    id TEXT PRIMARY KEY,
+    page_id TEXT,
+    keyword TEXT,
+    match_type TEXT,
+    flow_id TEXT,
+    FOREIGN KEY (page_id) REFERENCES pages(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_tags (
+    id TEXT PRIMARY KEY,
+    page_id TEXT,
+    fb_user_id TEXT,
+    tag TEXT,
+    UNIQUE(page_id, fb_user_id, tag)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_variables (
+    id TEXT PRIMARY KEY,
+    page_id TEXT,
+    fb_user_id TEXT,
+    key TEXT,
+    value TEXT,
+    UNIQUE(page_id, fb_user_id, key)
+  );
 `);
 
 app.use(cors());
@@ -268,6 +294,65 @@ app.post("/api/flows/:id/toggle", (req, res) => {
   res.json({ success: true, is_active: newStatus });
 });
 
+// --- KEYWORDS ROUTES ---
+app.get("/api/pages/:pageId/keywords", (req, res) => {
+  const keywords = db.prepare("SELECT * FROM keywords WHERE page_id = ?").all(req.params.pageId);
+  res.json({ keywords });
+});
+
+app.post("/api/keywords", (req, res) => {
+  const { pageId, keyword, matchType, flowId } = req.body;
+  const id = uuidv4();
+  db.prepare("INSERT INTO keywords (id, page_id, keyword, match_type, flow_id) VALUES (?, ?, ?, ?, ?)").run(id, pageId, keyword, matchType, flowId);
+  res.json({ success: true });
+});
+
+app.delete("/api/keywords/:id", (req, res) => {
+  db.prepare("DELETE FROM keywords WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+// --- SETTINGS ROUTES ---
+app.post("/api/pages/:pageId/settings/greeting", async (req, res) => {
+  const { text } = req.body;
+  const page = db.prepare("SELECT * FROM pages WHERE id = ?").get(req.params.pageId) as any;
+  if (!page) return res.status(404).json({ error: "Page not found" });
+  
+  try {
+    const token = decrypt(page.access_token);
+    await fetch(`https://graph.facebook.com/v19.0/me/messenger_profile?access_token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        greeting: [{ locale: "default", text }]
+      })
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update greeting" });
+  }
+});
+
+app.post("/api/pages/:pageId/settings/get_started", async (req, res) => {
+  const { payload } = req.body;
+  const page = db.prepare("SELECT * FROM pages WHERE id = ?").get(req.params.pageId) as any;
+  if (!page) return res.status(404).json({ error: "Page not found" });
+  
+  try {
+    const token = decrypt(page.access_token);
+    await fetch(`https://graph.facebook.com/v19.0/me/messenger_profile?access_token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        get_started: { payload }
+      })
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update get started" });
+  }
+});
+
 // --- WEBHOOK ---
 app.get("/webhook", (req, res) => {
   // Use the environment variable, or fallback to the token provided by the user ("pagebot")
@@ -310,17 +395,49 @@ app.post("/webhook", async (req, res) => {
         continue;
       }
 
-      const flow = db.prepare("SELECT * FROM flows WHERE page_id = ? AND is_active = 1 LIMIT 1").get(page.id) as any;
-      if (!flow) continue;
-
-      const nodes = JSON.parse(flow.nodes || '[]');
-      const edges = JSON.parse(flow.edges || '[]');
-
       for (const webhook_event of entry.messaging) {
         const senderId = webhook_event.sender.id;
+        
+        let messageText = "";
         if (webhook_event.message && !webhook_event.message.is_echo) {
-          const messageText = webhook_event.message.text;
-          await processFlow(page, user, senderId, messageText, nodes, edges);
+          messageText = webhook_event.message.text || "";
+          if (webhook_event.message.quick_reply) {
+            messageText = webhook_event.message.quick_reply.payload;
+          }
+        } else if (webhook_event.postback) {
+          messageText = webhook_event.postback.payload;
+        }
+
+        if (messageText) {
+          // Check Keywords
+          const keywords = db.prepare("SELECT * FROM keywords WHERE page_id = ?").all(page.id) as any[];
+          let matchedFlowId = null;
+          for (const kw of keywords) {
+            if (kw.match_type === 'exact' && messageText.toLowerCase() === kw.keyword.toLowerCase()) {
+              matchedFlowId = kw.flow_id; break;
+            } else if (kw.match_type === 'contains' && messageText.toLowerCase().includes(kw.keyword.toLowerCase())) {
+              matchedFlowId = kw.flow_id; break;
+            } else if (kw.match_type === 'regex') {
+              try {
+                const re = new RegExp(kw.keyword, 'i');
+                if (re.test(messageText)) { matchedFlowId = kw.flow_id; break; }
+              } catch(e) {}
+            }
+          }
+
+          let flow;
+          if (matchedFlowId) {
+            flow = db.prepare("SELECT * FROM flows WHERE id = ?").get(matchedFlowId) as any;
+            db.prepare("DELETE FROM conversations WHERE page_id = ? AND fb_user_id = ?").run(page.id, senderId);
+          } else {
+            flow = db.prepare("SELECT * FROM flows WHERE page_id = ? AND is_active = 1 LIMIT 1").get(page.id) as any;
+          }
+
+          if (flow) {
+            const nodes = JSON.parse(flow.nodes || '[]');
+            const edges = JSON.parse(flow.edges || '[]');
+            await processFlow(page, user, senderId, messageText, nodes, edges);
+          }
         }
       }
     }
@@ -353,11 +470,44 @@ async function processFlow(page: any, user: any, senderId: string, messageText: 
     if (!nextNode) break;
 
     if (nextNode.type === 'message') {
-      await sendMetaMessage(page.access_token, senderId, nextNode.data.label);
+      await sendMetaMessage(page.access_token, senderId, { text: nextNode.data.label });
       db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
       currentNodeId = nextNode.id;
+    } else if (nextNode.type === 'image') {
+      await sendMetaMessage(page.access_token, senderId, {
+        attachment: { type: "image", payload: { url: nextNode.data.url || "https://picsum.photos/400/300", is_reusable: true } }
+      });
+      db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
+      currentNodeId = nextNode.id;
+    } else if (nextNode.type === 'quick_replies') {
+      const replies = nextNode.data.replies || ['Yes', 'No'];
+      const quickReplies = replies.map((r: string) => ({ content_type: "text", title: r, payload: r }));
+      await sendMetaMessage(page.access_token, senderId, {
+        text: nextNode.data.label,
+        quick_replies: quickReplies
+      });
+      db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
+      currentNodeId = nextNode.id;
+      break; // Wait for input
+    } else if (nextNode.type === 'buttons') {
+      const buttons = (nextNode.data.buttons || ['Click Here']).map((b: string) => ({ type: "postback", title: b, payload: b }));
+      await sendMetaMessage(page.access_token, senderId, {
+        attachment: {
+          type: "template",
+          payload: { template_type: "button", text: nextNode.data.label, buttons: buttons.slice(0,3) }
+        }
+      });
+      db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
+      currentNodeId = nextNode.id;
+      break; // Wait for input
+    } else if (nextNode.type === 'set_variable') {
+      db.prepare("INSERT INTO user_variables (id, page_id, fb_user_id, key, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT(page_id, fb_user_id, key) DO UPDATE SET value = excluded.value").run(uuidv4(), page.id, senderId, nextNode.data.key, nextNode.data.value);
+      currentNodeId = nextNode.id;
+    } else if (nextNode.type === 'add_tag') {
+      db.prepare("INSERT OR IGNORE INTO user_tags (id, page_id, fb_user_id, tag) VALUES (?, ?, ?, ?)").run(uuidv4(), page.id, senderId, nextNode.data.tag);
+      currentNodeId = nextNode.id;
     } else if (nextNode.type === 'input') {
-      await sendMetaMessage(page.access_token, senderId, nextNode.data.label);
+      await sendMetaMessage(page.access_token, senderId, { text: nextNode.data.label });
       db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
       currentNodeId = nextNode.id;
       break; // Stop and wait for user input
@@ -387,7 +537,7 @@ function getNextNodeForMessage(currentNodeId: string, nodes: any[], edges: any[]
   }
 }
 
-async function sendMetaMessage(encryptedToken: string, recipientId: string, text: string) {
+async function sendMetaMessage(encryptedToken: string, recipientId: string, messagePayload: any) {
   try {
     const token = decrypt(encryptedToken);
     const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${token}`;
@@ -396,7 +546,7 @@ async function sendMetaMessage(encryptedToken: string, recipientId: string, text
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipient: { id: recipientId },
-        message: { text: text },
+        message: messagePayload,
         messaging_type: "RESPONSE"
       })
     });
