@@ -248,6 +248,13 @@ app.put("/api/flows/:id", (req, res) => {
   res.json({ success: true });
 });
 
+app.delete("/api/flows/:id", (req, res) => {
+  const flowId = req.params.id;
+  const result = db.prepare("DELETE FROM flows WHERE id = ?").run(flowId);
+  if (result.changes === 0) return res.status(404).json({ error: "Flow not found" });
+  res.json({ success: true });
+});
+
 app.post("/api/flows/:id/toggle", (req, res) => {
   const flowId = req.params.id;
   const flow = db.prepare("SELECT * FROM flows WHERE id = ?").get(flowId) as any;
@@ -336,27 +343,21 @@ async function processFlow(page: any, user: any, senderId: string, messageText: 
     currentNodeId = conversation.state;
   }
 
-  let nextNodeId = getNextNodeForMessage(currentNodeId, nodes, edges, messageText);
-  
-  while (nextNodeId) {
+  let loopCount = 0;
+  while (loopCount < 20) {
+    loopCount++;
+    const nextNodeId = getNextNodeForMessage(currentNodeId, nodes, edges, messageText);
+    if (!nextNodeId) break;
+
     const nextNode = nodes.find((n: any) => n.id === nextNodeId);
     if (!nextNode) break;
 
     if (nextNode.type === 'message') {
       await sendMetaMessage(page.access_token, senderId, nextNode.data.label);
       db.prepare("UPDATE users SET message_count = message_count + 1 WHERE id = ?").run(user.id);
-      currentNodeId = nextNode.id;
-      break; 
-    } else if (nextNode.type === 'condition') {
-      const conditionText = nextNode.data.label.toLowerCase();
-      const isMatch = messageText.toLowerCase().includes(conditionText);
-      const sourceHandle = isMatch ? 'true' : 'false';
-      const edge = edges.find((e: any) => e.source === nextNode.id && e.sourceHandle === sourceHandle);
-      nextNodeId = edge ? edge.target : null;
-      currentNodeId = nextNode.id;
-    } else {
-      break;
     }
+    
+    currentNodeId = nextNode.id;
   }
 
   if (currentNodeId !== (conversation?.state || null)) {
